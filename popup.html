@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body class="popup">
+        <div class="row">
+            <div class="title">Personal Wayback</div>
+        </div>
+
+        <div id="status" class="muted"></div>
+
+        <div class="actions">
+            <button id="toggleEnabled"></button>
+            <button id="toggleHost"></button>
+            <button id="openArchive">Open Archive</button>
+        </div>
+
+        <div class="card">
+            <div class="row space-between">
+                <label for="minStay">Min stay (ms)</label>
+                <input id="minStay" type="number" min="0" step="250" style="width: 110px;" />
+            </div>
+            <div class="muted">Pages closed/navigated away before this won’t be saved.</div>
+        </div>
+
+        <div class="card">
+            <div class="cardTitle">Blacklist URL pattern</div>
+            <div class="row gap">
+                <input id="patternInput" placeholder="e.g. *://*.github.com/*/settings*" />
+                <button id="addPattern">Add</button>
+            </div>
+            <div id="patternList" class="list"></div>
+        </div>
+
+        <script src="popup.js"></script>
+    </body>
+</html>

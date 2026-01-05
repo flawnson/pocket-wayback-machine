@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Personal Wayback Archive</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="page">
+<header class="header">
+    <h1>Archive</h1>
+    <div class="row gap">
+        <input id="urlInput" placeholder="Paste a URL to view versions (exact match)" />
+        <button id="loadBtn">Load</button>
+    </div>
+    <div class="muted">
+        Tip: by default this matches the exact URL (including query string). You can change normalization in <code>toUrlKey()</code>.
+    </div>
+</header>
+
+<main>
+    <div id="results"></div>
+    <div id="viewerWrap" class="viewerWrap hidden">
+        <div class="row gap">
+            <button id="closeViewer">Close Viewer</button>
+        </div>
+        <iframe id="viewer" class="viewer"></iframe>
+    </div>
+</main>
+
+<script type="module" src="archive.js"></script>
+</body>
+</html>

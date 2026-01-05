@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Personal Wayback (Auto-Archive Pages)",
+  "version": "0.1.0",
+  "description": "Automatically saves versions of pages you visit and lets you open older snapshots.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "sw.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Personal Wayback",
+    "default_popup": "dist/index.html"
+  },
+  "icons": {
+  }
+}
