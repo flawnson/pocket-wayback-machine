@@ -1,5 +1,5 @@
 // sw.js (ESM)
-import { putVisit, purgeVisitsOlderThan, putPageVersion, getVersionsByUrlKey } from "./db.js";
+import { putVisit, purgeVisitsOlderThan, putPageVersion, getVersionsByUrlKey } from "./db.ts";
 
 const SETTINGS_KEY = "pw_settings";
 const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;

@@ -1,4 +1,4 @@
-import { getVersionsByUrlKey, getVersion, deleteVersion } from "./db.js";
+import { getVersionsByUrlKey, getVersion, deleteVersion } from "./db.ts";
 
 function fmt(ts) {
     const d = new Date(ts);

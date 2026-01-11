@@ -1,24 +1,24 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Button } from "./components/ui/button";
-import { Input } from "./components/ui/input";
-import { Label } from "./components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
-import { ExternalLink, Plus, Trash2 } from "lucide-react";
+import {useEffect, useMemo, useState} from "react";
+import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card.tsx";
+import {Button} from "@/components/ui/button.tsx";
+import {Input} from "@/components/ui/input.tsx";
+import {Label} from "@/components/ui/label.tsx";
+import {ExternalLink, Plus, Trash2} from "lucide-react";
 
 async function getActiveTab() {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     return tab;
 }
 
 async function getSettings() {
-    const resp = await chrome.runtime.sendMessage({ type: "PW_GET_SETTINGS" });
-    return resp?.settings ?? { enabled: true, disabledHosts: [], disabledUrlPatterns: [], minStayMs: 2000 };
+    const resp = await chrome.runtime.sendMessage({type: "PW_GET_SETTINGS"});
+    return resp?.settings ?? {enabled: true, disabledHosts: [], disabledUrlPatterns: [], minStayMs: 2000};
 }
 
 export default function App() {
     const [loading, setLoading] = useState(true);
     const [tabUrl, setTabUrl] = useState("");
-    const [settings, setSettings] = useState(null);
+    const [settings, setSettings] = useState<any>(null);
     const [patternInput, setPatternInput] = useState("");
     const [minStayMs, setMinStayMs] = useState(2000);
 
@@ -56,21 +56,21 @@ export default function App() {
     }, []);
 
     async function toggleEnabled() {
-        await chrome.runtime.sendMessage({ type: "PW_TOGGLE_ENABLED" });
+        await chrome.runtime.sendMessage({type: "PW_TOGGLE_ENABLED"});
         await refresh();
     }
 
     async function toggleHost() {
         const tab = await getActiveTab();
-        await chrome.runtime.sendMessage({ type: "PW_TOGGLE_HOST", url: tab?.url || "" });
+        await chrome.runtime.sendMessage({type: "PW_TOGGLE_HOST", url: tab?.url || ""});
         await refresh();
     }
 
     async function openArchive() {
-        chrome.tabs.create({ url: chrome.runtime.getURL("archive.html") });
+        chrome.tabs.create({url: chrome.runtime.getURL("archive.html")});
     }
 
-    async function saveMinStay(next) {
+    async function saveMinStay(next: string) {
         const v = Number(next);
         await chrome.runtime.sendMessage({
             type: "PW_SET_MIN_STAY_MS",
@@ -82,13 +82,13 @@ export default function App() {
     async function addPattern() {
         const p = patternInput.trim();
         if (!p) return;
-        await chrome.runtime.sendMessage({ type: "PW_ADD_URL_PATTERN", pattern: p });
+        await chrome.runtime.sendMessage({type: "PW_ADD_URL_PATTERN", pattern: p});
         setPatternInput("");
         await refresh();
     }
 
-    async function removePattern(p) {
-        await chrome.runtime.sendMessage({ type: "PW_REMOVE_URL_PATTERN", pattern: p });
+    async function removePattern(p: string) {
+        await chrome.runtime.sendMessage({type: "PW_REMOVE_URL_PATTERN", pattern: p});
         await refresh();
     }
 
@@ -114,7 +114,7 @@ export default function App() {
                 </Button>
 
                 <Button onClick={openArchive} variant="secondary" disabled={loading}>
-                    <ExternalLink className="mr-2 h-4 w-4" />
+                    <ExternalLink className="mr-2 h-4 w-4"/>
                     Open Archive
                 </Button>
             </div>
@@ -160,17 +160,18 @@ export default function App() {
                             }}
                         />
                         <Button onClick={addPattern} disabled={loading || !patternInput.trim()}>
-                            <Plus className="h-4 w-4" />
+                            <Plus className="h-4 w-4"/>
                         </Button>
                     </div>
 
                     {patterns.length === 0 ? (
                         <div className="text-xs text-muted-foreground">
-                            No patterns. Example: <code className="px-1 py-0.5 rounded bg-muted">*://mail.google.com/*</code>
+                            No patterns. Example: <code
+                            className="px-1 py-0.5 rounded bg-muted">*://mail.google.com/*</code>
                         </div>
                     ) : (
                         <div className="space-y-2">
-                            {patterns.map((p) => (
+                            {patterns.map((p: string) => (
                                 <div key={p} className="flex items-center justify-between gap-2">
                                     <code className="text-xs px-2 py-1 rounded bg-muted max-w-[230px] truncate">
                                         {p}
@@ -182,7 +183,7 @@ export default function App() {
                                         disabled={loading}
                                         title="Remove"
                                     >
-                                        <Trash2 className="h-4 w-4" />
+                                        <Trash2 className="h-4 w-4"/>
                                     </Button>
                                 </div>
                             ))}
