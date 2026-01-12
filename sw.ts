@@ -1,5 +1,5 @@
-// sw.js (ESM)
-import { putVisit, purgeVisitsOlderThan, putPageVersion, getVersionsByUrlKey } from "./db.ts";
+// sw.ts (ESM)
+import { putVisit, purgeVisitsOlderThan, putPageVersion, getVersionsByUrlKey } from "./db";
 
 const SETTINGS_KEY = "pw_settings";
 const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;
@@ -7,12 +7,26 @@ const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;
 // Simple structured logging helpers (visible in Chrome's SW console)
 const LOG_PREFIX = "[PW]";
 const DEBUG = true; // flip to false to reduce noise
-const info = (...args) => console.log(LOG_PREFIX, ...args);
-const debug = (...args) => { if (DEBUG) console.debug(LOG_PREFIX, ...args); };
-const warn = (...args) => console.warn(LOG_PREFIX, ...args);
-const error = (...args) => console.error(LOG_PREFIX, ...args);
+const info = (...args: unknown[]) => console.log(LOG_PREFIX, ...args);
+const debug = (...args: unknown[]) => { if (DEBUG) console.debug(LOG_PREFIX, ...args); };
+const warn = (...args: unknown[]) => console.warn(LOG_PREFIX, ...args);
+const error = (...args: unknown[]) => console.error(LOG_PREFIX, ...args);
 
-async function logVisit({ tabId, url, urlKey, transitionType }) {
+type Settings = {
+    enabled: boolean;
+    minStayMs: number;
+    disabledHosts: string[];
+    disabledUrlPatterns: string[];
+};
+
+type LogVisitArgs = {
+    tabId: number;
+    url: string;
+    urlKey: string;
+    transitionType?: string;
+};
+
+async function logVisit({ tabId, url, urlKey, transitionType }: LogVisitArgs): Promise<void> {
     const visit = {
         visitId: crypto.randomUUID(),
         url,
@@ -23,7 +37,8 @@ async function logVisit({ tabId, url, urlKey, transitionType }) {
     };
     debug("logVisit -> creating visit", { tabId, url, urlKey, transitionType });
 
-    await putVisit(visit);
+    // If your Visit type in db.ts doesn't include transitionType/tabId, make them optional there
+    await putVisit(visit as any);
     debug("logVisit -> stored", { visitId: visit.visitId });
 
     // Keep only the last 30 days
@@ -40,7 +55,7 @@ async function logVisit({ tabId, url, urlKey, transitionType }) {
 //   disabledUrlPatterns: ["*://*.github.com/*/settings/*"]
 // }
 
-function isHttpUrl(url) {
+function isHttpUrl(url: string): boolean {
     try {
         const u = new URL(url);
         return u.protocol === "http:" || u.protocol === "https:";
@@ -49,7 +64,7 @@ function isHttpUrl(url) {
     }
 }
 
-function hostOf(url) {
+function hostOf(url: string): string {
     try {
         return new URL(url).host;
     } catch {
@@ -58,19 +73,20 @@ function hostOf(url) {
 }
 
 // Exact URL by default. (Includes query/hash.)
-function toUrlKey(url) {
+function toUrlKey(url: string): string {
     return url;
 }
 
-function wildcardToRegExp(pattern) {
+function wildcardToRegExp(pattern: string): RegExp {
     // Escape regex metacharacters, then convert '*' wildcards into '.*'
     const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
     const regexStr = "^" + escaped.replace(/\\\*/g, ".*") + "$";
     return new RegExp(regexStr);
 }
 
-function urlMatchesPatterns(url, patterns) {
-    for (const p of patterns) {
+function urlMatchesPatterns(url: string, patterns: string[]): boolean {
+    for (let i = 0; i < patterns.length; i++) {
+        const p = patterns[i];
         try {
             if (wildcardToRegExp(p).test(url)) return true;
         } catch {
@@ -81,10 +97,10 @@ function urlMatchesPatterns(url, patterns) {
     return false;
 }
 
-async function getSettings() {
+async function getSettings(): Promise<Settings> {
     const obj = await chrome.storage.local.get([SETTINGS_KEY]);
-    const s = obj[SETTINGS_KEY] || {};
-    const normalized = {
+    const s = (obj as Record<string, any>)[SETTINGS_KEY] || {};
+    const normalized: Settings = {
         enabled: s.enabled ?? true,
         minStayMs: s.minStayMs ?? 2000,
         disabledHosts: s.disabledHosts ?? [],
@@ -94,12 +110,12 @@ async function getSettings() {
     return normalized;
 }
 
-async function setSettings(next) {
+async function setSettings(next: Settings): Promise<void> {
     debug("setSettings <-", next);
     await chrome.storage.local.set({ [SETTINGS_KEY]: next });
 }
 
-async function shouldArchiveUrl(url) {
+async function shouldArchiveUrl(url: string): Promise<boolean> {
     if (!isHttpUrl(url)) {
         debug("shouldArchiveUrl -> false (non-http(s))", { url });
         return false;
@@ -126,18 +142,26 @@ async function shouldArchiveUrl(url) {
     return true;
 }
 
-async function sha256Hex(text) {
+async function sha256Hex(text: string): Promise<string> {
     const enc = new TextEncoder().encode(text);
     const buf = await crypto.subtle.digest("SHA-256", enc);
     const bytes = new Uint8Array(buf);
-    return [...bytes].map(b => b.toString(16).padStart(2, "0")).join("");
+
+    // Avoid TypedArray iteration/spread (TS2802 under ES5 targets)
+    let hex = "";
+    for (let i = 0; i < bytes.length; i++) {
+        hex += bytes[i].toString(16).padStart(2, "0");
+    }
+    return hex;
 }
 
-function makeVersionId() {
+function makeVersionId(): string {
     return crypto.randomUUID();
 }
 
-async function captureTabSnapshot(tabId) {
+type Snapshot = { title: string; html: string };
+
+async function captureTabSnapshot(tabId: number): Promise<Snapshot> {
     debug("captureTabSnapshot -> injecting content script", { tabId });
     // Inject content script (best practice for MV3)
     await chrome.scripting.executeScript({
@@ -145,28 +169,29 @@ async function captureTabSnapshot(tabId) {
         files: ["content.js"]
     });
 
-    const res = await chrome.tabs.sendMessage(tabId, { type: "PW_GET_SNAPSHOT" });
+    const res = await chrome.tabs.sendMessage(tabId, { type: "PW_GET_SNAPSHOT" }) as any;
     if (!res?.ok) {
         warn("captureTabSnapshot -> failed", { tabId, error: res?.error });
         throw new Error(res?.error || "Snapshot failed");
     }
-    const snap = { title: res.title || "", html: res.html || "" };
+    const snap: Snapshot = { title: res.title || "", html: res.html || "" };
     debug("captureTabSnapshot -> success", { tabId, title: snap.title, htmlBytes: snap.html.length });
     return snap;
 }
 
-async function archiveIfChanged(tabId, url) {
+async function archiveIfChanged(tabId: number, url: string): Promise<void> {
     if (!(await shouldArchiveUrl(url))) {
         debug("archiveIfChanged -> skip (shouldArchiveUrl=false)", { tabId, url });
         return;
     }
 
     // Some pages cannot be scripted (chrome://, webstore, etc.)
-    let snap;
+    let snap: Snapshot;
     try {
         snap = await captureTabSnapshot(tabId);
     } catch (e) {
-        warn("archiveIfChanged -> snapshot failed; skipping", { tabId, url, error: (e && e.message) || String(e) });
+        const msg = e instanceof Error ? e.message : String(e);
+        warn("archiveIfChanged -> snapshot failed; skipping", { tabId, url, error: msg });
         return;
     }
 
@@ -191,7 +216,8 @@ async function archiveIfChanged(tabId, url) {
         hash,
         contentType: "text/html",
         html: snap.html
-    });
+    } as any);
+
     info("archiveIfChanged -> stored new version", { urlKey, versionId, title: snap.title });
 }
 
@@ -202,10 +228,13 @@ async function archiveIfChanged(tabId, url) {
  * - navigation completes successfully (no onErrorOccurred)
  * - AND the tab stays on that URL for at least minStayMs after completion
  */
-const navByTab = new Map();      // tabId -> { url, completedAt, errored, timerId }
-const erroredTabUrl = new Map(); // tabId -> lastErroredUrl
+type TimerId = ReturnType<typeof setTimeout>;
+type NavState = { url: string; completedAt: number; errored: boolean; timerId: TimerId };
 
-function clearTabState(tabId) {
+const navByTab = new Map<number, NavState>();      // tabId -> { url, completedAt, errored, timerId }
+const erroredTabUrl = new Map<number, string>();   // tabId -> lastErroredUrl
+
+function clearTabState(tabId: number): void {
     const st = navByTab.get(tabId);
     if (st?.timerId) {
         debug("clearTabState -> clearing timer", { tabId, timerId: st.timerId });
@@ -280,7 +309,8 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
             await archiveIfChanged(tabId, url);
             debug("archive-timer -> archive attempted", { tabId, url });
         } catch (e) {
-            warn("archive-timer -> failed", { tabId, url, error: (e && e.message) || String(e) });
+            const msg = e instanceof Error ? e.message : String(e);
+            warn("archive-timer -> failed", { tabId, url, error: msg });
             // tab may have been closed
         } finally {
             clearTabState(tabId);
@@ -304,8 +334,18 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 /**
  * Messages from popup/UI
  */
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    debug("onMessage <-", { type: msg?.type });
+type Message =
+    | { type: "PW_GET_SETTINGS" }
+    | { type: "PW_TOGGLE_ENABLED" }
+    | { type: "PW_SET_MIN_STAY_MS"; minStayMs?: number | string }
+    | { type: "PW_TOGGLE_HOST"; url?: string }
+    | { type: "PW_ADD_URL_PATTERN"; pattern?: string }
+    | { type: "PW_REMOVE_URL_PATTERN"; pattern?: string }
+    | { type?: string; [k: string]: unknown };
+
+chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
+    debug("onMessage <-", { type: (msg as any)?.type });
+
     (async () => {
         if (msg?.type === "PW_GET_SETTINGS") {
             const settings = await getSettings();
@@ -325,7 +365,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
         if (msg?.type === "PW_SET_MIN_STAY_MS") {
             const settings = await getSettings();
-            const v = Number(msg?.minStayMs);
+            const v = Number((msg as any)?.minStayMs);
             if (Number.isFinite(v)) settings.minStayMs = Math.max(0, Math.floor(v));
             await setSettings(settings);
             info("onMessage -> PW_SET_MIN_STAY_MS", { minStayMs: settings.minStayMs });
@@ -334,7 +374,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
 
         if (msg?.type === "PW_TOGGLE_HOST") {
-            const url = String(msg?.url || "");
+            const url = String((msg as any)?.url || "");
             const host = hostOf(url);
             const settings = await getSettings();
             const set = new Set(settings.disabledHosts);
@@ -342,7 +382,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                 if (set.has(host)) set.delete(host);
                 else set.add(host);
             }
-            settings.disabledHosts = [...set].sort();
+
+            // Avoid Set iteration/spread (TS2802 under ES5 targets)
+            const arr: string[] = [];
+            set.forEach((v) => arr.push(v));
+            arr.sort();
+            settings.disabledHosts = arr;
+
             await setSettings(settings);
             info("onMessage -> PW_TOGGLE_HOST", { host, disabledHosts: settings.disabledHosts });
             sendResponse({ ok: true, settings });
@@ -350,12 +396,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
 
         if (msg?.type === "PW_ADD_URL_PATTERN") {
-            const pattern = String(msg?.pattern || "").trim();
+            const pattern = String((msg as any)?.pattern || "").trim();
             const settings = await getSettings();
             if (pattern) {
                 const set = new Set(settings.disabledUrlPatterns);
                 set.add(pattern);
-                settings.disabledUrlPatterns = [...set].sort();
+
+                // Avoid Set iteration/spread (TS2802 under ES5 targets)
+                const arr: string[] = [];
+                set.forEach((v) => arr.push(v));
+                arr.sort();
+                settings.disabledUrlPatterns = arr;
+
                 await setSettings(settings);
             }
             const updated = await getSettings();
@@ -365,16 +417,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
 
         if (msg?.type === "PW_REMOVE_URL_PATTERN") {
-            const pattern = String(msg?.pattern || "").trim();
+            const pattern = String((msg as any)?.pattern || "").trim();
             const settings = await getSettings();
-            settings.disabledUrlPatterns = settings.disabledUrlPatterns.filter(p => p !== pattern);
+            settings.disabledUrlPatterns = settings.disabledUrlPatterns.filter((p) => p !== pattern);
             await setSettings(settings);
             info("onMessage -> PW_REMOVE_URL_PATTERN", { pattern, disabledUrlPatterns: settings.disabledUrlPatterns });
             sendResponse({ ok: true, settings });
             return;
         }
 
-        warn("onMessage -> unknown message", { type: msg?.type });
+        warn("onMessage -> unknown message", { type: (msg as any)?.type });
         sendResponse({ ok: false, error: "Unknown message" });
     })();
 
