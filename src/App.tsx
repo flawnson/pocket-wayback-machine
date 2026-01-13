@@ -95,9 +95,11 @@ export default function App() {
     const patterns = settings?.disabledUrlPatterns ?? [];
 
     return (
-        <div className="p-3 space-y-3 text-sm">
+        <div className="min-w-80 p-3 space-y-3 text-sm">
             <div className="flex items-center justify-between">
-                <div className="text-base font-semibold">Personal Wayback</div>
+                <div className="text-base font-semibold">
+                    Personal Wayback
+                </div>
             </div>
 
             <div className="text-xs text-muted-foreground">
