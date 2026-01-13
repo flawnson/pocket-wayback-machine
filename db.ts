@@ -160,3 +160,50 @@ export async function purgeVisitsOlderThan(cutoffMs: number): Promise<void> {
         tx.onabort = () => reject(tx.error ?? new Error("transaction aborted"));
     });
 }
+
+/**
+ * Paged "history" query: newest -> oldest.
+ *
+ * Pass `before` to continue paging older items:
+ * - first page: before = undefined
+ * - next page: before = lastRow.visitAt
+ */
+export async function getVisitsPage(args?: {
+    limit?: number;
+    before?: number; // exclusive upper bound
+}): Promise<{ rows: Visit[]; nextBefore: number | null }> {
+    const limit = Math.max(1, Math.floor(args?.limit ?? 50));
+    const before = args?.before;
+
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.VISITS, "readonly");
+        const store = tx.objectStore(STORES.VISITS);
+        const idx = store.index("by_visitAt");
+
+        const range =
+            typeof before === "number"
+                ? IDBKeyRange.upperBound(before, true) // strictly older than `before`
+                : undefined;
+
+        const rows: Visit[] = [];
+        const req = idx.openCursor(range, "prev"); // newest -> oldest
+
+        req.onsuccess = () => {
+            const cursor = req.result;
+            if (!cursor || rows.length >= limit) return;
+
+            rows.push(cursor.value as Visit);
+            cursor.continue();
+        };
+
+        req.onerror = () => reject(req.error ?? new Error("cursor request error"));
+
+        tx.oncomplete = () => {
+            const nextBefore = rows.length > 0 ? rows[rows.length - 1]!.visitAt : null;
+            resolve({ rows, nextBefore });
+        };
+        tx.onerror = () => reject(tx.error ?? new Error("transaction error"));
+        tx.onabort = () => reject(tx.error ?? new Error("transaction aborted"));
+    });
+}
